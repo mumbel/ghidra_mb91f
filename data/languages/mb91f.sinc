@@ -1,0 +1,1159 @@
+# sleigh include file for MB91F language instructions
+
+# FMB91F
+define endian=big;
+define alignment=2;
+
+define space ram      type=ram_space      size=4  default;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=4 [ r0 r1 r2 r3 r4 r5 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+define register offset=0x00 size=4 [ _  _  _  _  _  _  _  _  _  _   _   _   AC  FP  SP ];
+
+define register offset=0x40 size=4 [ PC ];
+define register offset=0x44 size=4 [ PS ];
+
+define register offset=0x48 size=4 [ TBR RP SSP USP MDH MDL ];
+
+define register offset=0x100 size=4 [ c0 c1 c2 c3 c4 c5 c7 c8 c9 c10 c11 c12 c13 c14 c15 ];
+
+# Condition Code Register (CCR) - NZVC
+# C - PS[0,1];
+# V - PS[1,1];
+# Z - PS[2,1];
+# N - PS[3,1]
+# I - PS[4,1];
+# S - PS[5,1];
+
+define token opbyte (16)
+       ri = (0,3)
+       rs = (0,4)
+       u8 = (0,7)
+       rel8 = (0,7)
+       dir = (0,7)
+       reglist = (0,7)
+       rel11 = (0,10)
+       rj = (4,7)
+       u4 = (4,7)
+       m4 = (4,7)
+       subop = (4,7)
+       s5 = (4,8) signed
+       u5 = (4,8)
+       i8 = (4,11)
+       o8 = (4,11)
+       opA = (8,15)
+       opC = (8,15)
+       opD = (8,15)
+       opDcc = (8,11)
+       opDCC = (12,15)
+       opE = (8,15)
+       opP = (9,15)
+       opF = (11,15)
+       opB = (12,15)
+;
+
+attach variables [ ri rj ] [ r0 r1 r2 r3 r4 r5 r7 r8 r9 r10 r11 r12 AC FP SP ];
+
+attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
+
+################################################################
+# Macros
+################################################################
+
+
+
+################################################################
+# Tables
+################################################################
+
+:cc "ra" is opDcc=0x0 { local tmp:1 = 1; export tmp; }
+:cc "no" is opDcc=0x2 { local tmp:1 = 0; export tmp; }
+:cc "eq" is opDcc=0x2 { local tmp:1 = (Z == 1); export tmp; }
+:cc "ne" is opDcc=0x3 { local tmp:1 = (Z == 0); export tmp; }
+:cc "c"  is opDcc=0x4 { local tmp:1 = (C == 1); export tmp; }
+:cc "nc" is opDcc=0x5 { local tmp:1 = (C == 0); export tmp; }
+:cc "n"  is opDcc=0x6 { local tmp:1 = (N == 1); export tmp; }
+:cc "p"  is opDcc=0x7 { local tmp:1 = (N == 0); export tmp; }
+:cc "v"  is opDcc=0x8 { local tmp:1 = (V == 1); export tmp; }
+:cc "nv" is opDcc=0x9 { local tmp:1 = (V == 0); export tmp; }
+:cc "lt" is opDcc=0xA { local tmp:1 = ((V ^ N) == 1); export tmp; }
+:cc "ge" is opDcc=0xB { local tmp:1 = ((V ^ N) == 0); export tmp; }
+:cc "le" is opDcc=0xC { local tmp:1 = (((V ^ N) | Z) == 1); export tmp; }
+:cc "gt" is opDcc=0xD { local tmp:1 = (((V ^ N) | Z) == 0); export tmp; }
+:cc "ls" is opDcc=0xE { local tmp:1 = ((C | Z) == 1); export tmp; }
+:cc "hi" is opDcc=0xF { local tmp:1 = ((C | Z) == 0); export tmp; }
+
+################################################################
+# Instructions
+################################################################
+
+#       MSB   - 16 -  LSB         
+# A  =  op8 | rj | ri
+# B  =  op4 | i8/o8 | ri
+# C  =  op8 | u4/m4 | ri
+# C' =  op7 | s5/u5 | ri
+# D  =  op8 | u7/rel8/dir/reglist
+# E  =  op8 | subop | ri
+# F  =  op5 | rel11
+
+# ADD Rj, Ri A A6 1 CCCC Ri + Rj --> Ri
+:add rj, ri is opA=0xa6 & rj & ri
+{
+	ri = ri + rj;
+	#TODO  CCCC
+}
+
+# *ADD #s5, Ri C’ A4 1 CCCC Ri + s5 --> Ri
+:add #s5, ri is opP=0xA4 & s5 & ri
+{
+	ri = s5 + ri;
+	#TODO  CCCC
+}
+
+# ADD #u4, Ri C A4 1 CCCC Ri + extu(i4) --> Ri (zero extension)
+:add #u4, ri is opC=0xA4 & u4 & ri
+{
+	ri = u4 + ri;
+	#TODO  CCCC
+}
+
+# ADD2 #u4, Ri C A5 1 CCCC Ri + extu(i4) --> Ri  (minus extension)
+:add2 #u4, ri is opC=0xA5 & u4 & i4 & r1
+{
+	ri = i4 + ri;
+	#TODO  CCCC
+}
+
+# ADDC Rj, Ri A A7 1 CCCC Ri + Rj + c --> Ri (addition with carry)
+:addc rj, ri is opA=0xA7 & ri & rj
+{
+	ri = ri + rj + C;
+	#TODO  CCCC
+}
+
+# ADDN Rj, Ri A A2 1 ---- Ri + Rj --> Ri
+:addn rj, ri is opA=0xA2 & ri & rj
+{
+	ri = ri + rj;
+}
+
+# *ADDN #s5, Ri C’ A0 1 ---- Ri + s5 --> Ri
+:addn #s5, ri is opP=0xA0 & s5 & ri
+{
+	ri = s5 + ri;
+}
+
+# ADDN #u4, Ri C A0 1 ---- Ri + extu(i4) --> Ri (zero extension)
+:addn #u4, ri is opC=0xA0 & u4 & ri
+{
+	ri = ri + u4;
+}
+
+# ADDN2 #u4, Ri C A1 1 ---- Ri + extu(i4) --> Ri (minux extension)
+:addn2 #u4, ri is opC=0xA1 & u4 & i4 & ri
+{
+	ri = ri + i4;
+}
+
+# SUB Rj, Ri A AC 1 CCCC Ri - Rj --> Ri
+:sub rj, ri is opA=0xAC & ri & rj
+{
+	ri = ri - rj;
+	#TODO  CCCC
+}
+
+# SUBC Rj, Ri A AD 1 CCCC Ri - Rj - c --> Ri (addition with carry)
+:subc rj, ri is opA=0xAD & ri & rj
+{
+	ri = ri - rj - c;
+	#TODO  CCCC
+}
+
+# SUBN Rj, Ri A AE 1 ---- Ri - Rj --> Ri
+:subn rj, ri is opA=0xAE & ri & rj
+{
+	ri = rj - ri;
+}
+
+# CMP Rj, Ri A AA 1 CCCC Ri - R
+:cmp rj, ri is opA=0xAA & ri & rj
+{
+	local res = ri - rj;
+	#TODO  CCCC
+}
+
+# *CMP #s5, Ri C’ A8 1 CCCC Ri - s5
+:cmp #s5, ri is opP=0xA8 & s5 & ri
+{
+	local res = ri - s5;
+	#TODO  CCCC
+}
+
+# CMP #u4, Ri C A8 1 CCCC Ri - extu(i4) (zero extension)
+:cmp #u4, ri is opC=0xA8 & u4 & ri
+{
+	local res = ri - u4;
+	#TODO  CCCC
+}
+
+# CMP2 #u4, Ri C A9 1 CCCC Ri - extu(i4) Minus extension
+:cmp2 #u4, ri is opC=0xA9 & u4 & i4 & ri
+{
+	local res = ri - i4;
+	#TODO  CCCC
+}
+
+# AND Rj, Ri A 82 1 CC-- Ri &= Rj  Word
+:and rj, ri & opA=0x82 & ri & rj
+{
+	ri = ri & rj;
+	#TODO  CC--
+}
+
+# AND Rj, @Ri* A 84 1+2a CC-- (Ri) &= Rj  Word
+:and rj, @ri* is opA=0x84 & ri & rj
+{
+	local tmp:4 = *[]:4 ri;
+	tmp = tmp & rj;
+	*[]:4 ri = tmp;
+	#TODO  CC--
+}
+
+# ANDH Rj, @Ri* A 85 1+2a CC-- (Ri) &= Rj  Halfword
+:andh rj, @ri* is opA=0x85 & ri & rj
+{
+	local tmp:2 = *[]:2 ri;
+	tmp = tmp & rj[0,16];
+	*[]:2 ri = tmp;
+	#TODO  CC--
+}
+
+# ANDB Rj, @Ri* A 86 1+2a CC-- (Ri) &= Rj  Byte
+:andb rj, @ri* is opA=0x86 & ri & rj
+{
+	local tmp:1 = *[]:1 ri;
+	tmp = tmp & rj[0,8];
+	*[]:1 ri = tmp;
+	#TODO  CC--
+}
+
+# OR Rj, Ri A 92 1 CC-- Ri | = Rj  Word
+:or rj, ri & opA=0x92 & ri & rj
+{
+	ri = ri | rj;
+	#TODO  CC--
+}
+
+# OR Rj, @Ri* A 94 1+2a CC-- (Ri) | = Rj  Word
+:or rj, @ri* is opA=0x94 & ri & rj
+{
+	local tmp:4 = *[]:4 ri;
+	tmp = tmp | rj;
+	*[]:4 ri = tmp;
+	#TODO  CC--
+}
+
+# ORH Rj, @Ri* A 95 1+2a CC-- (Ri) | = Rj  Halfword
+:orh rj, @ri* is opA=0x95 & ri & rj
+{
+	local tmp:2 = *[]:2 ri;
+	tmp = tmp | rj[0,16];
+	*[]:2 ri = tmp;
+	#TODO  CC--
+}
+
+# ORB Rj, @Ri* A 96 1+2a CC-- (Ri) | = Rj  Byte
+:orb rj, @ri* is opA=0x96 & ri & rj
+{
+	local tmp:1 = *[]:1 ri;
+	tmp = tmp | rj[0,8];
+	*[]:1 ri = tmp;
+	#TODO  CC--
+}
+
+# EOR Rj, Ri A 9A 1 CC-- Ri ^ = Rj  Word
+:eor rj, ri & opA=0x9A & ri & rj
+{
+	ri = ri ^ rj;
+	#TODO  CC--
+}
+
+# EOR Rj, @Ri* A 9C 1+2a CC-- (Ri) ^ = Rj  Word
+:eor rj, @ri* is opA=0x9C & ri & rj
+{
+	local tmp:4 = *[]:4 ri;
+	tmp = tmp ^ rj;
+	*[]:4 ri = tmp;
+	#TODO  CC--
+}
+
+# EORH Rj, @Ri* A 9D 1+2a CC-- (Ri) ^ = Rj  Halfword
+:eorh rj, @ri* is opA=0x9D & ri & rj
+{
+	local tmp:2 = *[]:2 ri;
+	tmp = tmp ^ rj[0,16];
+	*[]:2 ri = tmp;
+	#TODO  CC--
+}
+
+# EORB Rj, @Ri* A 9E 1+2a CC-- (Ri) ^ = Rj  Byte
+:eorb rj, @ri* is opA=0x9E & ri & rj
+{
+	local tmp:1 = *[]:1 ri;
+	tmp = tmp ^ rj[0,8];
+	*[]:1 ri = tmp;
+	#TODO  CC--
+}
+
+# BANDL #u4, @Ri C 80 1+2a ---- (Ri)&=(0xF0+u4)
+:bandl #u4, @ri is opC=0x80 & u4 & ri
+{
+	local tmp:4 = *[]:4 ri;
+	tmp = tmp & (0xf0 + u4);
+	*[]:4 r1 = tmp;
+}
+
+# BANDH #u4, @Ri C 81 1+2a ---- (Ri)&=((u4<<4)+0x0F)
+:bandh #u4, @ri is opC=0x81 & u4 & ri
+{
+	local tmp:4 = *[]:4 ri;
+	tmp = tmp & (0x0f + (u4 << 4));
+	*[]:4 r1 = tmp;
+}
+
+# BAND #u8, @Ri*1 ---- (Ri)&=u8
+# TODO
+
+# BORL #u4, @Ri C 90 1+2a ---- (Ri) | = u4
+:borl #u4, @ri is opC=0x90 & u4 & ri
+{
+	local tmp:4 = *[]:4 ri;
+	tmp = tmp | u4;
+	*[]:4 r1 = tmp;
+}
+
+
+# BORLH #u4, @Ri C 91 1+2a ---- (Ri) | = (u4<<4)
+:borlh #u4, @ri is opC=0x91 & u4 & ri
+{
+	local tmp:4 = *[]:4 ri;
+	tmp = tmp | (u4 << 4);
+	*[]:4 r1 = tmp;
+}
+
+# BOR #u8, @Ri*2 ---- (Ri) | = u8
+# TODO
+
+# BEORL #u4, @Ri C 98 1+2a ---- (Ri) ^ = u4
+:beorl #u4, @ri is opC=0x98 & u4 & ri
+{
+	local tmp:4 = *[]:4 ri;
+	tmp = tmp ^ u4;
+	*[]:4 r1 = tmp;
+}
+
+# BEORH #u4, @Ri C 99 1+2a ---- (Ri) ^ = (u4<<4)
+:beorh #u4, @ri is opC=0x99 & u4 & ri
+{
+	local tmp:4 = *[]:4 ri;
+	tmp = tmp ^ (u4 << 4);
+	*[]:4 r1 = tmp;
+}
+
+# BTSTL #u4, @Ri C 88 2+a 0C-- (Ri) & u4
+:btstl #u4, @ri is opC=0x88 & u4 & ri
+{
+	local res:4 = *[]:4 ri;
+	res = res & u4;
+	#TODO  0C--
+}
+
+# BTSTH #u4, @Ri C 89 2+a CC-- (Ri) & (u4<<4)
+:btsth #u4, @ri is opC=0x89 & u4 & ri
+{
+	local res:4 = *[]:4 ri;
+	res = res & (u4 << 4);
+	#TODO  0C--
+}
+
+# MUL Rj,Ri A AF 5 CCC- Ri x Rj --> MDH,MDL
+:mul rj, ri is opA=0xAF & rj & ri
+{
+	local res:8 = sext(ri) * sext(rj);
+	MDH = res[32,32];
+	MDL = res[0,32];
+	#TODO  CCC-
+}
+
+# MULU Rj,Ri A AB 5 CCC- Ri x Rj --> MDH,MDL
+:mulu rj, ri is opA=0xAB & rj & ri
+{
+	local res:8 = zext(ri) * zext(rj);
+	MDH = res[32,32];
+	MDL = res[0,32];
+	#TODO  CCC-
+}
+
+# MULH Rj,Ri A BF 3 CC-- Ri x Rj --> MDL
+:mulh rj, ri is opA=0xBF & rj & ri
+{
+	MDL = sext(ri[0,16]) * sext(rj[0,16]);
+	#TODO  CC--
+}
+
+# MULUH Rj,Ri A BB 3 CC-- Ri x Rj --> MDL
+:muluh rj, ri is opA=0xBB & rj & ri
+{
+	MDL = zext(ri[0,16]) * zext(rj[0,16]);
+	#TODO  CC--
+}
+
+# DIV0S Ri E 97-4 1 ---- Step operation
+:div0s ri is opE=0x97 & subop=0x4 & ri
+{
+	#TODO
+}
+
+# DIV0U Ri E 97-5 1 ---- 32bits/32bits=32bits
+:div0u ri is opE=0x97 & subop=0x5 & ri
+{
+	#TODO
+}
+
+# DIV1 Ri E 97-6 d -C-C
+:div1 ri is opE=0x97 & subop=0x6 & ri
+{
+	#TODO
+	#TODO  -C-C
+}
+
+# DIV2 Ri E 97-7 1 -C-C
+:div1 ri is opE=0x97 & subop=0x7 & ri
+{
+	#TODO
+	#TODO  -C-C
+}
+
+# DIV3 E 9F-6 1 ----
+:div3 is opE=0x9F & subop=0x6
+{
+	#TODO
+}
+
+# DIV4S E 9F-7 1 ----
+:div4s is opE=0x9F & subop=0x7
+{
+	#TODO
+}
+
+# DIV Ri 36 -C-C MDL / Ri --> MDL, MDL % Ri --> MDH
+#TODO
+
+# DIVU Ri 33 -C-C MDL / Ri --> MDL, MDL % Ri --> MDH
+#TODO
+
+# LSL Rj, Ri A B6 1 CC-C Ri << Rj --> Ri
+:lsl rj, ri is opA=0xB6 & rj & ri
+{
+	ri = ri << rj;
+	#TODO  CC-C
+}
+
+# LSL #u5, Ri (u5:0 to 31) C' B4 1 CC-C Ri << u5 --> Ri
+:lsl #u5, ri is opP=0xB4 & u5 & ri
+{
+	ri = ri << u5;
+	#TODO  CC-C
+}
+
+# LSL #u4, Ri C B4 1 CC-C Ri << u4 --> Ri
+:lsl #u4, ri is opC=0xB4 & u4 & ri
+{
+	ri = ri << u4;
+	#TODO  CC-C
+}
+
+# LSL2 #u4, Ri C B5 1 CC-C Ri <<(u4+16) --> Ri
+:lsl2 #u4, ri is opC=0xB5 & u4 & ri
+{
+	ri = ri << (u4 + 0x10);
+	#TODO  CC-C
+}
+
+# LSR Rj, Ri A B2 1 CC-C Ri >> Rj --> Ri
+:lr rj, ri is opA=0xB2 & rj & ri
+{
+	ri = ri >> rj;
+	#TODO  CC-C
+}
+
+#LSR #u5, Ri (u5:0 to 31) C' B0 1 CC-C Ri >> u5 --> Ri
+:lsr #u5, ri is opP=0xB0 & u5 & ri
+{
+	ri = ri >> u5;
+	#TODO  CC-C
+}
+
+#LSR #u4, Ri C B0 1 CC-C Ri >> u4 --> Ri
+:lsr #u4, ri is opC=0xB0 & u4 & ri
+{
+	ri = ri >> u4;
+	#TODO  CC-C
+}
+
+#LSR2 #u4, Ri C B1 1 CC-C Ri >>(u4+16) --> Ri
+:lsr2 #u4, ri is opC=0xB1 & u4 & ri
+{
+	ri = ri >> (u4 + 0x10);
+	#TODO  CC-C
+}
+
+#ASR Rj, Ri A BA 1 CC-C Ri >> Rj --> Ri
+:asr rj, ri is opA=0BA & rj & ri
+{
+	ri = ri s>> rj;
+	#TODO  CC-C
+}
+
+#ASR #u5, Ri (u5:0 to 31) C' B8 1 CC-C Ri >> u5 --> Ri
+:asr #u5, ri is opP=0xB8 & u5 & ri
+{
+	ri = ri s>> u5;
+	#TODO  CC-C
+}
+
+#ASR #u4, Ri C B8 1 CC-C Ri >> u4 --> Ri
+:asr #u4, ri is opC=0xB8 & u4 & ri
+{
+	ri = ri s>> u4;
+	#TODO  CC-C
+}
+
+#ASR2 #u4, Ri C B9 1 CC-C Ri >>(u4+16) --> Ri
+:asr2 #u4, ri is opC=0xB9 & u4 & ri
+{
+	ri = ri s>> (u4 + 0x10);
+	#TODO  CC-C
+}
+
+# LDI:32 #i32, Ri E 9F-8 3 ---- i32 --> Ri
+:ldi:32 #i32, ri is opE=0x9F & subop=0x3 & i32 & ri
+{
+	ri = i32;
+}
+
+# LDI:20 #i20, Ri C 9B 2 ---- i20 --> Ri
+:ldi:20 #i20, ri is opC=0x9B & i20 & ri
+{
+	ri = zext(i20);
+}
+
+# LDI:8 #i8, Ri B C0 1 ---- i8 --> Ri
+:ldi:8 #i8, ri is opB=0xC0 & i8 & ri
+{
+	ri = zext(i8);
+}
+
+# *LDI # {i8 | i20 | i32} ,Ri* {i8 | i20 | i32} --> Ri
+#TODO
+
+# LD @Rj, Ri A 04 b ---- (Rj) --> Ri
+:ld @rj, ri is opA=0x04 & rj & ri
+{
+	ri = *[]:4 rj;
+}
+
+# LD @(R13,Rj), Ri A 00 b ---- (R13+Rj) --> Ri
+:ld @(r13, rj), ri is opA=0x00 & rj & ri & r13
+{
+	ri = *[]:4 (r13 + rj);
+}
+
+# LD @(R14,disp10), Ri B 20 b ---- (R14+disp10) --> Ri
+:ld @(r14, disp10), ri is opB=0x20 & disp10 & ri & r14
+{
+	ri = *[]:4 (r14 + disp10);
+}
+
+# LD @(R15,udisp6), Ri C 03 b ---- (R15+udisp6) --> Ri
+:ld @(r15, udisp6), ri is opC=0x03 & r15 & udisp6 & ri
+{
+	ri = *[]:4 (r15 + udisp6);
+}
+
+# LD @R15+, Ri E 07-0 b ---- (R15) --> Ri,R15+=4
+:ld @r15+, ri is opE=0x07 & subop=0x0 & r15 & ri
+{
+	ri = *[]:4 r15;
+	r15 = r15 + 4;
+}
+
+# LD @R15+, Rs E 07-8 b ---- (R15) --> Rs, R15+=4
+:ld @r15+, rs is opE=0x07 & subop=0x8 & r15 & rs
+{
+	#TODO
+	rs = *[]:4 r15;
+	r15 = r15 + 4;
+}
+
+# LD @R15+, PS E 07-9 1+a+b CCCC (R15) --> PS, R15+=4
+:ld @r15+, PS is opE=0x07 & subop=0x9 & r15 & PS
+{
+	PS = *[]:4 r15;
+	r15 = r15 + 4;
+	#TODO  CCCC
+}
+
+# LDUH @Rj, Ri A 05 b ---- (Rj) -->Ri Zero extension
+:lduh @rj, ri is opA=0x05 & rj & ri
+{
+	ri = zext(*[]:2 rj);
+}
+
+# LDUH @(R13,Rj), Ri A 01 b ---- (R13+Rj) -->Ri Zero extension
+:lduh @(r13, rj), ri is opA=0x01 & r13 & rj & ri
+{
+	ri = zext(*[]:2 (r13 + rj));
+}
+
+# LDUH @(R14,disp9), Ri B 40 b ---- (R14+disp9) -->Ri Zero extension
+:lduh @(r14, disp9), ri is opB=0x40 & r14 & disp9 & ri
+{
+	ri = zext(*[]:2 (r14 + disp9));
+}
+
+# LDUB @Rj, Ri A 06 b ---- (Rj) -->Ri Zero extension
+:ldub @rj, ri is opA=0x06 & rj & ri
+{
+	ri = zext(*[]:2 rj);
+}
+
+# LDUB @(R13,Rj), Ri A 02 b ---- (R13+Rj) -->Ri Zero extension
+:ldub @(r13, rj), ri is opA=0x02 & r13 & rj & ri
+{
+	ri = zext(*[]:2 (r13 + rj));
+}
+
+# LDUB @(R14,disp8), Ri B 60 b ---- (R14+disp8) -->Ri Zero extension
+:ldub @(r14, disp8), ri is opB=0x60 & r14 & disp8 & ri
+{
+	ri = zext(*[]:2 (r14 + disp8));
+}
+
+# ST Ri, @Rj A 14 a ---- Ri --> (Rj)
+:st ri, @rj is opA=0x14 & rj & ri
+{
+	*[]:4 rj = ri;
+}
+
+# ST Ri, @(R13,Rj) A 10 a ---- Ri --> (R13+Rj)
+:st ri, @(r13, rj) is opA=0x10 & rj & ri & r13
+{
+	*[]:4 (r13 + rj) = ri;
+}
+
+# ST Ri, @(R14,disp10) B 30 a ---- Ri --> (R14+disp10)
+:st ri, @(r14, disp10) is opB=0x30 & r14 & disp10 & ri
+{
+	*[]:4 (r14 + disp10) = ri;
+}
+
+# ST Ri, @(R15,udisp6) C 13 a ---- Ri --> (R15+udisp6)
+:st ri, @(r15, udisp6) is opC=0x13 & r15 & udisp6 & ri
+{
+	*[]:4 (r15 + udisp6) = ri;
+}
+
+# ST Ri, @-R15 E 17-0 a ---- R15-=4,Ri --> (R15)
+:st ri, @-r15 is opE=0x17 & subop=0x0 & r15 & ri
+{
+	r15 = r15 - 4;
+	*[]:4 r15 = ri;
+}
+
+# ST Rs, @-R15 E 17-8 a ---- R15-=4, Rs --> (R15)
+:st rs, @-r15 is opE=0x17 & subop=0x8 & rs & r15
+{
+	r15 = r15 - 4;
+	*[]:4 r15 = rs;
+}
+
+# ST PS, @-R15 E 17-9 a ---- R15-=4, PS --> (R15)
+:st PS, @-r15 is opE=0x17 & subop=0x9 & PS & r15
+{
+	r15 = r15 - 4;
+	*[]:4 r15 = PS;
+}
+
+# STH Ri, @Rj A 15 a ---- Ri --> (Rj)
+:sth ri, @rj is opA=0x15 & rj & ri
+{
+	*[]:2 rj = ri[0,16];
+}
+
+# STH Ri, @(R13,Rj) A 11 a ---- Ri --> (R13+Rj)
+:sth ri, @(r13, rj) is opA=0x11 & ri & rj & r13
+{
+	*[]:2 (r13 + rj) = ri[0,16];
+}
+
+# STH Ri, @(R14,disp9) B 50 a ---- Ri --> (R14+disp9)
+:sth ri, @(r14, disp9) is opB=0x50 & r14 & disp9
+{
+	*[]:2 (r14 + disp9) = ri[0,16];
+}
+
+# STB Ri, @Rj A 16 a ---- Ri --> (Rj)
+:stb ri, @rj is opA=0x16 & ri & rj
+{
+	*[]:1 rj = ri[0,8];
+}
+
+# STB Ri, @(R13,Rj) A 12 a ---- Ri --> (R13+Rj)
+:stb ri, @(r13, rj) is opA=0x12 & r13 & rj & ri
+{
+	*[]:1 (r13 + rj) = ri[0,8];
+}
+
+# STB Ri, @(R14,disp8) B 70 a ---- Ri --> (R14+disp8)
+:stb ri, @(r14, disp8) is opB=0x70 & ri & r14 & disp8
+{
+	*[]:1 (r14 + disp8) = r[0,8];
+}
+
+# MOV Rj, Ri A 8B 1 ---- Rj --> Ri
+:mov rj, ri is opA=0x8B & rj & ri
+{
+	ri = rj;
+}
+
+# MOV Rs, Ri A B7 1 ---- Rs --> Ri
+:mov rs, ri is opA=0xB7 & rs & ri
+{
+	ri = rs;
+}
+
+# MOV Ri, Rs E B3 1 ---- Ri --> Rs
+:mov ri, rs is opE=0B3 & subop=0x1 & rs & ri
+{
+	rs = ri;
+}
+
+# MOV PS, Ri E 17-1 1 ---- PS --> Ri
+:mov PS, ri is opE=0x17 & subop=0x1 & PS & ri
+{
+	ri = PS;
+}
+
+# MOV Ri, PS E 07-1 c CCCC Ri --> PS
+:mov ri, PS is opE=0x07 & subop=0x1 & PS & ri
+{
+	PS = ri;
+	#TODO  CCCC
+}
+
+# JMP @Ri E 97-0 2 ---- Ri --> PC
+:jmp @ri is opE=0x97 & subop=0x2 & ri
+{
+	goto [ri];
+}
+
+# JMP:D @Ri E 9F-0 1 ---- Ri --> PC
+:jmp:d @ri is opE=0x9F & subop=0x0 & ri
+{
+	delayslot(1);
+	goto [ri];
+}
+
+# CALL label12 F D0 2 ---- PC+2-->RP , PC+2+(label12-PC-2)-->PC
+:call label12 is opF=0xD0 & label12
+{
+	RP = inst_next;
+	local ea:4 = label12 - inst_next;
+	ea = inst_next + ea;
+	call ea;
+}
+
+# CALL:D label12 F D8 1 ---- PC+4 --> RP, PC+2+(label12-PC-2) --> PC
+:call:d label12 is opF=0xD8 & label12
+{
+	#TODO  is inst_start okay to use?
+	delayslot(1);
+	RP = inst_start + 4;
+	local ea:4 = label12 - (inst_start + 2);
+	ea = (inst_start + 2) + ea;
+	call ea;
+}
+
+# CALL @Ri E 97-1 2 ---- PC+2-->RP ,Ri-->PC
+:call @ri is opE=0x97 & subop=0x1 & ri
+{
+	RP = inst_next;
+	call [ri];
+}
+
+# CALL:D @Ri E 9F-1 1 ---- PC+4 --> RP ,Ri --> PC
+:call:d @ri is opE=0x9F & subop=0x1 & ri
+{
+	#TODO  is inst_start okay to use?
+	delayslot(1);
+	RP = inst_start + 4;
+	call [ri];
+}
+
+# RET E 97-2 2 ---- RP --> PC
+:ret is opE=0x97 & subop=0x2
+{
+	return RP;
+}
+
+# RET:D E 9F-2 1 ---- RP --> PC
+:ret:d is opE=0x9F & subop=0x2
+{
+	delayslot(1);
+	return RP;
+}
+
+# INT #u8 D AC 3+3a ---- SSP-=4,PS --> (SSP),SSP-=4,PC+2 --> (SSP),(TBR+0x3FC-u8x4) --> PC
+:int #u8 is opD=0xAC & u8
+{
+	SSP = SSP - 4;
+	*[]:4 SSP = PS;
+	I = 0;
+	S = 0;
+	local ea:4 = TBR + 0x3fc - (u8 * 4);
+	call ea;
+}
+
+# INTE E 9F-3 3+3a ---- SSP-=4,PS --> (SSP),SSP-=4,PC+2 --> (SSP),(TBR+0x3D8) -->PC
+:inte is opE=0x9F & subop=0x3
+{
+	SSP = SSP - 4;
+	*[]:4 SSP = PS;
+	SSP = SSP - 4;
+	*[]:4 SSP = inst_next;
+	local ea:4 = TBR + 0x3d8;
+	call ea;
+}
+
+# RETI E 97-3 2+2A CCCC (R15) --> PC,R15-=4,(R15) --> PS,R15-=4
+:reti is opE=0x97 & subop=0x3
+{
+	local ea:4 = *[]:4 r15;
+	r15 = r15 - 4;
+	PS = *[]:4 r15;
+	r15 = r15 - 4;
+	return ea;
+	#TODO  CCCC
+}
+
+# BRA label9 D E0 2 ---- PC+2+(label9-PC-2) -->PC
+# BNO label9 D E1 1 ---- No branch
+# BEQ label9 D E2 2/1 ---- if(Z==1) then PC+2+(label9-PC-2) -->PC
+# BNE label9 D E3 2/1 ---- s/Z==0
+# BC label9 D E4 2/1 ---- s/C==1
+# BNC label9 D E5 2/1 ---- s/C==0
+# BN label9 D E6 2/1 ---- s/N==1
+# BP label9 D E7 2/1 ---- s/N==0
+# BV label9 D E8 2/1 ---- s/V==1
+# BNV label9 D E9 2/1 ---- s/V==0
+# BLT label9 D EA 2/1 ---- s/V xor N==1
+# BGE label9 D EB 2/1 ---- s/V xor N==0
+# BLE label9 D EC 2/1 ---- s/(V xor N) or Z==1
+# BGT label9 D ED 2/1 ---- s/(V xor N) or Z==0
+# BLS label9 D EE 2/1 ---- s/C or Z==1
+# BHI label9 D EF 2/1 ---- s/C or Z==0
+:b^cc label9 is opDCC=0xE & cc & label9
+{
+	if (cc != 0) goto label9;
+}
+
+:b^cc^:d label9 is opDCC=0xF & cc & label9
+{
+	delayslot(1);
+	if (cc != 0) goto label9;
+}
+
+# NOP E 9F-A 1 ---- No change
+:nop is opE=0x9F & subop=0xA
+{
+	local tmp:1 = 0;
+	tmp = tmp;
+}
+
+# ANDCCR #u8 D 83 c CCCC CCR and u8 --> CCR
+:andccr #u8 is opD=0x83
+{
+	CCR = CCR & u8;
+	#TODO  CCCC
+}
+
+# ORCCR #u8 D 93 c CCCC CCR or u8 --> CCR
+:orccr #u8 is opD=0x93 & u8
+{
+	CCR = CCR | u8;
+	#TODO  CCCC
+}
+
+# STILM #u8 D 87 1 ---- i8 --> ILM
+:stilm #u8 is opD=0x87 & u8
+{
+	ILM = u8;
+}
+
+# ADDSP #s10 D A3 1 ---- R15 += s10
+:addsp #s10 is opD=0xA3 & s10
+{
+	r15 = r15 + s10;
+}
+
+# EXTSB Ri E 97-8 1 ---- Sign extension 8 --> 32bit
+:extsb ri is opE=0x97 & subop=8 & ri
+{
+	ri = sext(ri[0,8]);
+}
+
+# EXTUB Ri E 97-9 1 ---- Zero extension 8 --> 32bit
+:extub ri is opE=0x97 & subop=0x9 & ri
+{
+	ri = zext(ri[0,8]);
+}
+
+# EXTSH Ri E 97-A 1 ---- Sign extension 16 --> 32bit
+:extsh ri is opE=0x97 & subop=0xA & ri
+{
+	ri = sext(ri[0,16]);
+}
+
+# EXTUH Ri E 97-B 1 ---- Zero extension 16 --> 32bit
+:extuh ri is opE=0x97 & subop=0xB & ri
+{
+	ri = zext(ri[0,16]);
+}
+
+# LDM0 (reglist) D 8C ---- (R15) --> reglist,R15 increment- Load multi R0-R7
+:ldm0 (reglist) is opD=0x8C & reglist
+{
+	build ldm0_list;
+}
+
+# LDM1 (reglist) D 8D ---- (R15) --> reglist,R15 increment- Load multi R8-R15
+:ldm1 (reglist) is opD=0x8D & reglist
+{
+	build ldm1_list;
+}
+
+# LDM (reglist)*2 ---- (R15) --> reglist,R15 increment- Load multi R0-R15
+#TODO
+
+# STM0 (reglist) D 8E ---- R15 decrement,reglist --> (R15)- Store multi R0-R7
+:stm0 (reglist) is opD=0x8E & reglist
+{
+	build stm0_list;
+}
+
+# STM1 (reglist) D 8F ---- R15 decrement,reglist --> (R15)- Store multi R8-R15
+:stm1 (reglist) is opD=0x8F & reglist
+{
+	build stm0_list;
+}
+
+# STM (reglist)*3 ---- R15 decrement,reglist --> (R15)- Store multi R0-R15
+#TODO
+
+# ENTER #u10 D 0F 1+a ---- R14 --> (R15 - 4),R15 - 4 --> R14,R15 - u10 --> R15
+:enter #u10 is opD=0x0F & u10
+{
+	*[]:4 (r15 - 4) = r14;
+	r14 = r15 - 4;
+	r15 = r15 - u10;
+}
+
+# LEAVE E 9F-9 b ---- R14 + 4 --> R15,(R15 - 4) --> R14
+:leave is opE=0x9F & subop=0x9
+{
+	r15 = r14 + 4;
+	r14 = *[]:4 (r15 - 4);
+}
+
+# XCHB @Rj, Ri*5 A 8A 2a ---- Ri --> TEMP,(Rj) --> Ri,TEMP --> (Rj)
+:xchb @rj, ri is opA=0x8A & rj & ri
+{
+	local tmp = ri;
+	ri = *[]:1 rj;
+	rj = *[]:1 tmp;
+}
+
+# DMOV @dir10, R13 D 08 b ---- (dir10) --> R13
+:dmov @dir10, r13 is opD=0x08 & dir10
+{
+	r13 = *[]: dir10;
+}
+
+# DMOV R13, @dir10 D 18 a ---- R13 --> (dir10)
+:dmov r13, @dir10 is opD=0x18 & dir10
+{
+	*[]:4 dir10 = r13;
+}
+
+# DMOV @dir10, @R13+ D 0C 2a ---- (dir10) --> (R13),R13+=4
+:dmov @dir10, @r13+ is opD=0x0C & dir10
+{
+	*[]:4 r13 = *[]:4 dir10;
+	r13 = r13 + 4;
+}
+
+# DMOV @R13+, @dir10 D 1C 2a ---- (R13) --> (dir10),R13+=4
+:dmov @r13+, @dir10 is opD=0x1c & dir10 
+{
+	*[]:4 dir10 = *[]:4 r13;
+	r13 = r13 + 4;
+}
+
+# DMOV @dir10, @-R15 D 0B 2a ---- R15-=4,(R15) --> (dir10)
+:dmov @dir10, @-r15 is opD=0x0B & dir10
+{
+	r15 = r15 - 4;
+	*[]:4 dir10 = *[]:4 r15;
+}
+
+# DMOV @R15+, @dir10 D 1B 2a ---- (R15) --> (dir10),R15+=4
+:dmov @r15+, @dir10 is opD=0x1B & dir10
+{
+	*[]:4 dir10 = *[]:4 r15;	
+	r15 = r15 + 4;
+}
+
+# DMOVH @dir9, R13 D 09 b ---- (dir9) --> R13
+:dmovh @dir9, r13 is opD=0x09 & dir9
+{
+	r13 = *[]:2 dir9;
+}
+
+# DMOVH R13, @dir9 D 19 a ---- R13 --> (dir9)
+:dmovh r13, @dir9 is opD=0x19 & dir9
+{
+	*[]:2 dir9 = r13[0,16];
+}
+
+# DMOVH @dir9, @R13+ D 0D 2a ---- (dir9) --> (R13),R13+=2
+:dmovh @dir9, @r13+ is opD=0x0D & dir9
+{
+	*[]:2 r13 = *[]:2 dir9;
+	r13 = r13 + 2;
+}
+
+# DMOVH @R13+, @dir9 D 1D 2a ---- (R13) --> (dir9),R13+=2
+:dmovh @r13+, @dir9 is opD=0x1D & dir9
+{
+	*[]:2 dir9 = *[]:2 r13;
+	r13 = r13 + 2;
+}
+
+# DMOVB @dir8, R13 D 0A b ---- (dir8) --> R13
+:dmovb @dir8, r13 is opD=0x0A & dir8
+{
+	r13 = *[]:1 dir8;
+}
+
+# DMOVB R13, @dir8 D 1A a ---- R13 --> (dir8)
+:dmovb r13, @dir8 is opD=0x1A & dir8
+{
+	*[]:1 dir8 = r13[0,8];
+}
+
+# DMOVB @dir8, @R13+ D 0E 2a ---- (dir8) --> (R13),R13++
+:dmovb @dir8, @r13+ is opD=0x0E & dir8
+{
+	*[]:1 r13 = *[]:1 dir8;
+	r13 = r13 + 1;
+}
+
+# DMOVB @R13+, @dir8 D 1E 2a ---- (R13) --> (dir8),R13++
+:dmovb @r13+, @dir8 is opD=0x1E & dir8
+{
+	*[]:1 dir8 = *[]:1 r13;
+	r13 = r13 + 1;
+}
+
+# LDRES @Ri+, #u4 C BC a ---- (Ri) --> u4 resource, Ri+=4 
+:ldres @ri+, #u4 is opC=0xBC & u4 & ri
+{
+	#TODO huh
+	ri = ri + 4;
+}
+
+# STRES #u4, @Ri+ C BD a ---- u4 resource --> (Ri), Ri+=4
+:stres #u4, @ri+ is opC=0xBD is u4 & ri
+{
+	#TODO huh
+	ri = ri + 4;
+}
+
+# COPOP #u4, #u8, CRj, CRi E 9F-C 2+a ---- Operation instruction
+:copop #u4, #u8, crj, cri is opE=0x9F & subop=0xC & u8 & u8 & crj & cri
+{
+	#TODO
+}
+
+# COPLD #u4, #u8, Rj, CRi E 9F-D 1+2a ---- Rj --> CRi
+:copld #u4, #u8, rj, cri is opE=0x9F & subop=0xD & u4 & u8 & rj & cri
+{
+	#TOOD
+}
+
+# COPST #u4, #u8, CRj, Ri E 9F-E 1+2a ---- CRj --> Ri
+:copst #u4, #u8, crj, ri is opE=0x9F & subop=0xE & u4 & u8 & crj & ri
+{
+	#TODO
+}
+
+# COPSV #u4, #u8, CRj, Ri E 9F-F 1+2a ---- CRj --> Ri
+:copsv #u4, #u8, crj, ri is opE=0x9F & subop=0xF & u4 & u8 & crj & ri
+{
+	#TODO
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

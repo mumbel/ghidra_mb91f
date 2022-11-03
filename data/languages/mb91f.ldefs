@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/language_definitions.rxg -->
+
+<language_definitions>
+<!-- Uncomment the following to make the language available in Ghidra -->
+<!-- 
+   <language processor="MB91F"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="mb91f.sla"
+            processorspec="mb91f.pspec"
+            id="mb91f:LE:16:default">
+    <description>MB91F Language Module</description>
+    <compiler name="default" spec="mb91f.cspec" id="default"/>
+  </language> 
+-->
+</language_definitions>
