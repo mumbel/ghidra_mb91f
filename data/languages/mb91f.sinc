@@ -7,35 +7,45 @@ define alignment=2;
 define space ram      type=ram_space      size=4  default;
 define space register type=register_space size=4;
 
-define register offset=0x00 size=4 [ r0 r1 r2 r3 r4 r5 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
-define register offset=0x00 size=4 [ _  _  _  _  _  _  _  _  _  _   _   _   AC  FP  SP ];
+define register offset=0x00 size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+# define register offset=0x00 size=4 [ _  _  _  _  _  _  _  _  _  _  _   _   _   AC  FP  SP ];
 
 define register offset=0x40 size=4 [ PC ];
 define register offset=0x44 size=4 [ PS ];
 
 define register offset=0x48 size=4 [ TBR RP SSP USP MDH MDL ];
 
-define register offset=0x100 size=4 [ c0 c1 c2 c3 c4 c5 c7 c8 c9 c10 c11 c12 c13 c14 c15 ];
+# define register offset=0x100 size=4 [ c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 ];
 
 # Condition Code Register (CCR) - NZVC
-# C - PS[0,1];
-# V - PS[1,1];
-# Z - PS[2,1];
-# N - PS[3,1]
-# I - PS[4,1];
-# S - PS[5,1];
+@define C "PS[0,1]"
+@define V "PS[1,1]"
+@define Z "PS[2,1]"
+@define N "PS[3,1]"
+@define I "PS[4,1]"
+@define S "PS[5,1]"
 
 define token opbyte (16)
        ri = (0,3)
-       rs = (0,4)
+       # cri = (0,3)
+       rs = (0,3)
        u8 = (0,7)
-       rel8 = (0,7)
+       rel8 = (0,7) signed
        dir = (0,7)
-       reglist = (0,7)
+       reglist0 = (0,0)
+       reglist1 = (1,1)
+       reglist2 = (2,2)
+       reglist3 = (3,3)
+       reglist4 = (4,4)
+       reglist5 = (5,5)
+       reglist6 = (6,6)
+       reglist7 = (7,7)
        rel11 = (0,10)
        rj = (4,7)
+       # crj = (4,7)
        u4 = (4,7)
-       m4 = (4,7)
+       i4 = (4,7) signed
+       m4 = (4,7) signed
        subop = (4,7)
        s5 = (4,8) signed
        u5 = (4,8)
@@ -52,7 +62,16 @@ define token opbyte (16)
        opB = (12,15)
 ;
 
-attach variables [ ri rj ] [ r0 r1 r2 r3 r4 r5 r7 r8 r9 r10 r11 r12 AC FP SP ];
+define token opbyte1 (16)
+       i16 = (0,15) signed
+;
+
+define token obyte2 (32)
+       i32 = (0,31) signed
+;
+       
+attach variables [ ri rj ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+# attach variables [ cri crj ] [ c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 ];
 
 attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 
@@ -66,27 +85,147 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 # Tables
 ################################################################
 
-:cc "ra" is opDcc=0x0 { local tmp:1 = 1; export tmp; }
-:cc "no" is opDcc=0x2 { local tmp:1 = 0; export tmp; }
-:cc "eq" is opDcc=0x2 { local tmp:1 = (Z == 1); export tmp; }
-:cc "ne" is opDcc=0x3 { local tmp:1 = (Z == 0); export tmp; }
-:cc "c"  is opDcc=0x4 { local tmp:1 = (C == 1); export tmp; }
-:cc "nc" is opDcc=0x5 { local tmp:1 = (C == 0); export tmp; }
-:cc "n"  is opDcc=0x6 { local tmp:1 = (N == 1); export tmp; }
-:cc "p"  is opDcc=0x7 { local tmp:1 = (N == 0); export tmp; }
-:cc "v"  is opDcc=0x8 { local tmp:1 = (V == 1); export tmp; }
-:cc "nv" is opDcc=0x9 { local tmp:1 = (V == 0); export tmp; }
-:cc "lt" is opDcc=0xA { local tmp:1 = ((V ^ N) == 1); export tmp; }
-:cc "ge" is opDcc=0xB { local tmp:1 = ((V ^ N) == 0); export tmp; }
-:cc "le" is opDcc=0xC { local tmp:1 = (((V ^ N) | Z) == 1); export tmp; }
-:cc "gt" is opDcc=0xD { local tmp:1 = (((V ^ N) | Z) == 0); export tmp; }
-:cc "ls" is opDcc=0xE { local tmp:1 = ((C | Z) == 1); export tmp; }
-:cc "hi" is opDcc=0xF { local tmp:1 = ((C | Z) == 0); export tmp; }
+cc: "ra" is opDcc=0x0 { local tmp:1 = 1; export *[const]:1 tmp; }
+cc: "no" is opDcc=0x1 { local tmp:1 = 0; export *[const]:1 tmp; }
+cc: "eq" is opDcc=0x2 { local tmp:1 = ($(Z) == 1); export *[const]:1 tmp; }
+cc: "ne" is opDcc=0x3 { local tmp:1 = ($(Z) == 0); export *[const]:1 tmp; }
+cc: "c"  is opDcc=0x4 { local tmp:1 = ($(C) == 1); export *[const]:1 tmp; }
+cc: "nc" is opDcc=0x5 { local tmp:1 = ($(C) == 0); export *[const]:1 tmp; }
+cc: "n"  is opDcc=0x6 { local tmp:1 = ($(N) == 1); export *[const]:1 tmp; }
+cc: "p"  is opDcc=0x7 { local tmp:1 = ($(N) == 0); export *[const]:1 tmp; }
+cc: "v"  is opDcc=0x8 { local tmp:1 = ($(V) == 1); export *[const]:1 tmp; }
+cc: "nv" is opDcc=0x9 { local tmp:1 = ($(V) == 0); export *[const]:1 tmp; }
+cc: "lt" is opDcc=0xA { local tmp:1 = (($(V) ^ $(N)) == 1); export *[const]:1 tmp; }
+cc: "ge" is opDcc=0xB { local tmp:1 = (($(V) ^ $(N)) == 0); export *[const]:1 tmp; }
+cc: "le" is opDcc=0xC { local tmp:1 = ((($(V) ^ $(N)) | $(Z)) == 1); export *[const]:1 tmp; }
+cc: "gt" is opDcc=0xD { local tmp:1 = ((($(V) ^ $(N)) | $(Z)) == 0); export *[const]:1 tmp; }
+cc: "ls" is opDcc=0xE { local tmp:1 = (($(C) | $(Z)) == 1); export *[const]:1 tmp; }
+cc: "hi" is opDcc=0xF { local tmp:1 = (($(C) | $(Z)) == 0); export *[const]:1 tmp; }
+
+dir10: imm is dir [ imm = dir << 2; ] { local tmp:4 = imm; export tmp; }
+dir9: imm is dir [ imm = dir << 1; ]  { local tmp:4 = imm; export tmp; }
+dir8: dir is dir                      { local tmp:4 = dir; export tmp; } 
+
+label12: imm is rel11 [ imm = rel11 << 1; ] { local tmp:4 = imm; export tmp; }
+label9: imm is rel8   [ imm = rel8 << 1; ]  { local tmp:4 = imm; export tmp; }
+
+disp10: imm is o8 [ imm = o8 << 2; ] { local tmp:4 = imm; export tmp; }
+disp9: imm is o8 [ imm = o8 << 1; ]  { local tmp:4 = imm; export tmp; }
+disp8: o8 is o8                      { local tmp:4 = o8; export tmp; }
+
+udisp6: imm is u5 [ imm = u5 << 1; ] { local tmp:4 = imm; export tmp; }
+
+i20: imm is m4 ; i16 [ imm = m4 << 16 | i16; ] { local tmp:4 = imm; export tmp; }
+
+s10: imm is rel8 [ imm = rel8 << 2; ] { local tmp:4 = imm; export tmp; }
+u10: imm is u8 [ imm = u8 << 2; ] { local tmp:4 = imm; export tmp; }
+
+
+ldm_r15:   ,r15 is r15 &reglist7=1           { r15 = *[ram]:4 r15 ; r15 = r15 + 4;                }
+ldm_r15:        is epsilon              {                                                    }
+
+ldm_r14:   ,r14 is r14 & ldm_r15 & reglist6=1 { r14 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r15; }
+ldm_r14:        is ldm_r15              {                                     build ldm_r15; }
+
+ldm_r13:   ,r13 is r13 & ldm_r14 & reglist5=1 { r13 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r14; }
+ldm_r13:        is ldm_r14              {                                     build ldm_r14; }
+
+ldm_r12:   ,r12 is r12 & ldm_r13 & reglist4=1 { r12 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r13; }
+ldm_r12:        is ldm_r13              {                                     build ldm_r13; }
+
+ldm_r11:   ,r11 is r11 & ldm_r12 & reglist3=1 { r11 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r12; }
+ldm_r11:        is ldm_r12              {                                     build ldm_r12; }
+
+ldm_r10:   ,r10 is r10 & ldm_r11 & reglist2=1 { r10 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r11; }
+ldm_r10:        is ldm_r11              {                                     build ldm_r11; }
+
+ldm_r9:   ,r9 is r9 & ldm_r10 & reglist1=1 { r9 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r10; }
+ldm_r9:       is ldm_r10              {                                    build ldm_r10; }
+
+ldm1_list: r8 is r8 & ldm_r9 & reglist0=1 { r8 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r9; }
+ldm1_list:    is ldm_r9              {                                    build ldm_r9; }
+
+
+ldm_r7:   ,r7 is r7 & reglist7=1 { r7 = *[ram]:4 r15 ; r15 = r15 + 4;               }
+ldm_r7:       is epsilon             {                                                  }
+
+ldm_r6:   ,r6 is r6 & ldm_r7 & reglist6=1 { r6 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r7; }
+ldm_r6:       is ldm_r7              {                                    build ldm_r7; }
+
+ldm_r5:   ,r5 is r5 & ldm_r6 & reglist5=1 { r5 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r6; }
+ldm_r5:       is ldm_r6              {                                    build ldm_r6; }
+
+ldm_r4:   ,r4 is r4 & ldm_r5 & reglist4=1 { r4 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r5; }
+ldm_r4:       is ldm_r5              {                                    build ldm_r5; }
+
+ldm_r3:   ,r3 is r3 & ldm_r4 & reglist3=1 { r3 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r4; }
+ldm_r3:       is ldm_r4              {                                    build ldm_r4; }
+
+ldm_r2:   ,r2 is r2 & ldm_r3 & reglist2=1 { r2 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r3; }
+ldm_r2:       is ldm_r3              {                                    build ldm_r3; }
+
+ldm_r1:   ,r1 is r1 & ldm_r2 & reglist1=1 { r1 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r2; }
+ldm_r1:       is ldm_r2              {                                    build ldm_r2; }
+
+ldm0_list: r0 is r0 & ldm_r1 & reglist0=1 { r0 = *[ram]:4 r15 ; r15 = r15 + 4; build ldm_r1; }
+ldm0_list:    is ldm_r1              {                                    build ldm_r1; }
+
+
+stm_r15:   ,r15 is r15 & reglist7=1 { r15 = r15 - 4; *[ram]:4 r15 = r15;               }
+stm_r15:        is epsilon              {                                                   }
+
+stm_r14:   ,r14 is r14 & stm_r15 & reglist6=1 { r15 = r15 - 4; *[ram]:4 r15 = r14; build stm_r15; }
+stm_r14:        is stm_r15              {                                    build stm_r15; }
+
+stm_r13:   ,r13 is r13 & stm_r14 & reglist5=1 { r15 = r15 - 4; *[ram]:4 r15 = r13; build stm_r14; }
+stm_r13:        is stm_r14              {                                    build stm_r14; }
+
+stm_r12:   ,r12 is r12 & stm_r13 & reglist4=1 { r15 = r15 - 4; *[ram]:4 r15 = r12; build stm_r13; }
+stm_r12:        is stm_r13              {                                    build stm_r13; }
+
+stm_r11:   ,r11 is r11 & stm_r12 & reglist3=1 { r15 = r15 - 4; *[ram]:4 r15 = r11; build stm_r12; }
+stm_r11:        is stm_r12              {                                    build stm_r12; }
+
+stm_r10:   ,r10 is r10 & stm_r11 & reglist2=1 { r15 = r15 - 4; *[ram]:4 r15 = r10; build stm_r11; }
+stm_r10:        is stm_r11              {                                    build stm_r11; }
+
+stm_r9:   ,r9 is r9 & stm_r10 & reglist1=1 { r15 = r15 - 4; *[ram]:4 r15 = r9; build stm_r10; }
+stm_r9:       is stm_r10              {                                   build stm_r10; }
+
+stm1_list: r8 is r8 & stm_r9 & reglist0=1 { r15 = r15 - 4; *[ram]:4 r15 = r8; build stm_r9; }
+stm1_list:    is stm_r9              {                                   build stm_r9; }
+
+
+stm_r7:   ,r7 is r7 & reglist7=1 { r15 = r15 - 4; *[ram]:4 r15 = r7;               }
+stm_r7:       is epsilon             {                                                 }
+
+stm_r6:   ,r6 is r6 & stm_r7 & reglist6=1 { r15 = r15 - 4; *[ram]:4 r15 = r6; build stm_r7; }
+stm_r6:       is stm_r7              {                                   build stm_r7; }
+
+stm_r5:   ,r5 is r5 & stm_r6 & reglist5=1 { r15 = r15 - 4; *[ram]:4 r15 = r5; build stm_r6; }
+stm_r5:       is stm_r6              {                                   build stm_r6; }
+
+stm_r4:   ,r4 is r4 & stm_r5 & reglist4=1 { r15 = r15 - 4; *[ram]:4 r15 = r4; build stm_r5; }
+stm_r4:       is stm_r5              {                                   build stm_r5; }
+
+stm_r3:   ,r3 is r3 & stm_r4 & reglist3=1 { r15 = r15 - 4; *[ram]:4 r15 = r3; build stm_r4; }
+stm_r3:       is stm_r4              {                                   build stm_r4; }
+
+stm_r2:   ,r2 is r2 & stm_r3 & reglist2=1 { r15 = r15 - 4; *[ram]:4 r15 = r2; build stm_r3; }
+stm_r2:       is stm_r3              {                                   build stm_r3; }
+
+stm_r1:   ,r1 is r1 & stm_r2 & reglist1=1 { r15 = r15 - 4; *[ram]:4 r15 = r1; build stm_r2; }
+stm_r1:       is stm_r2              {                                   build stm_r2; }
+
+stm0_list: r0 is r0 & stm_r1 & reglist0=1 { r15 = r15 - 4; *[ram]:4 r15 = r0; build stm_r1; }
+stm0_list:    is stm_r1              {                                   build stm_r1; }
+
 
 ################################################################
 # Instructions
 ################################################################
 
+#ATTN  All of the OP in the manual are all 8-bit.  Need to bitshift B, C', and F
 #       MSB   - 16 -  LSB         
 # A  =  op8 | rj | ri
 # B  =  op4 | i8/o8 | ri
@@ -104,7 +243,7 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # *ADD #s5, Ri C’ A4 1 CCCC Ri + s5 --> Ri
-:add #s5, ri is opP=0xA4 & s5 & ri
+:add #s5, ri is opP=0x52 & s5 & ri
 {
 	ri = s5 + ri;
 	#TODO  CCCC
@@ -118,7 +257,7 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # ADD2 #u4, Ri C A5 1 CCCC Ri + extu(i4) --> Ri  (minus extension)
-:add2 #u4, ri is opC=0xA5 & u4 & i4 & r1
+:add2 #u4, ri is opC=0xA5 & u4 & i4 & ri
 {
 	ri = i4 + ri;
 	#TODO  CCCC
@@ -127,7 +266,8 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 # ADDC Rj, Ri A A7 1 CCCC Ri + Rj + c --> Ri (addition with carry)
 :addc rj, ri is opA=0xA7 & ri & rj
 {
-	ri = ri + rj + C;
+	local res:4 = ri + rj + zext($(C));
+	ri = res;
 	#TODO  CCCC
 }
 
@@ -138,7 +278,7 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # *ADDN #s5, Ri C’ A0 1 ---- Ri + s5 --> Ri
-:addn #s5, ri is opP=0xA0 & s5 & ri
+:addn #s5, ri is opP=0x50 & s5 & ri
 {
 	ri = s5 + ri;
 }
@@ -165,7 +305,8 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 # SUBC Rj, Ri A AD 1 CCCC Ri - Rj - c --> Ri (addition with carry)
 :subc rj, ri is opA=0xAD & ri & rj
 {
-	ri = ri - rj - c;
+	local res:4 = ri - rj - zext($(C));
+	ri = res;
 	#TODO  CCCC
 }
 
@@ -183,7 +324,7 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # *CMP #s5, Ri C’ A8 1 CCCC Ri - s5
-:cmp #s5, ri is opP=0xA8 & s5 & ri
+:cmp #s5, ri is opP=0x54 & s5 & ri
 {
 	local res = ri - s5;
 	#TODO  CCCC
@@ -204,121 +345,121 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # AND Rj, Ri A 82 1 CC-- Ri &= Rj  Word
-:and rj, ri & opA=0x82 & ri & rj
+:and rj, ri is opA=0x82 & ri & rj
 {
 	ri = ri & rj;
 	#TODO  CC--
 }
 
-# AND Rj, @Ri* A 84 1+2a CC-- (Ri) &= Rj  Word
-:and rj, @ri* is opA=0x84 & ri & rj
+# AND Rj, @Ri A 84 1+2a CC-- (Ri) &= Rj  Word
+:and rj, @ri is opA=0x84 & ri & rj
 {
-	local tmp:4 = *[]:4 ri;
+	local tmp:4 = *[ram]:4 ri;
 	tmp = tmp & rj;
-	*[]:4 ri = tmp;
+	*[ram]:4 ri = tmp;
 	#TODO  CC--
 }
 
-# ANDH Rj, @Ri* A 85 1+2a CC-- (Ri) &= Rj  Halfword
-:andh rj, @ri* is opA=0x85 & ri & rj
+# ANDH Rj, @Ri A 85 1+2a CC-- (Ri) &= Rj  Halfword
+:andh rj, @ri is opA=0x85 & ri & rj
 {
-	local tmp:2 = *[]:2 ri;
+	local tmp:2 = *[ram]:2 ri;
 	tmp = tmp & rj[0,16];
-	*[]:2 ri = tmp;
+	*[ram]:2 ri = tmp;
 	#TODO  CC--
 }
 
-# ANDB Rj, @Ri* A 86 1+2a CC-- (Ri) &= Rj  Byte
-:andb rj, @ri* is opA=0x86 & ri & rj
+# ANDB Rj, @Ri A 86 1+2a CC-- (Ri) &= Rj  Byte
+:andb rj, @ri is opA=0x86 & ri & rj
 {
-	local tmp:1 = *[]:1 ri;
+	local tmp:1 = *[ram]:1 ri;
 	tmp = tmp & rj[0,8];
-	*[]:1 ri = tmp;
+	*[ram]:1 ri = tmp;
 	#TODO  CC--
 }
 
 # OR Rj, Ri A 92 1 CC-- Ri | = Rj  Word
-:or rj, ri & opA=0x92 & ri & rj
+:or rj, ri is opA=0x92 & ri & rj
 {
 	ri = ri | rj;
 	#TODO  CC--
 }
 
-# OR Rj, @Ri* A 94 1+2a CC-- (Ri) | = Rj  Word
-:or rj, @ri* is opA=0x94 & ri & rj
+# OR Rj, @Ri A 94 1+2a CC-- (Ri) | = Rj  Word
+:or rj, @ri is opA=0x94 & ri & rj
 {
-	local tmp:4 = *[]:4 ri;
+	local tmp:4 = *[ram]:4 ri;
 	tmp = tmp | rj;
-	*[]:4 ri = tmp;
+	*[ram]:4 ri = tmp;
 	#TODO  CC--
 }
 
-# ORH Rj, @Ri* A 95 1+2a CC-- (Ri) | = Rj  Halfword
-:orh rj, @ri* is opA=0x95 & ri & rj
+# ORH Rj, @Ri A 95 1+2a CC-- (Ri) | = Rj  Halfword
+:orh rj, @ri is opA=0x95 & ri & rj
 {
-	local tmp:2 = *[]:2 ri;
+	local tmp:2 = *[ram]:2 ri;
 	tmp = tmp | rj[0,16];
-	*[]:2 ri = tmp;
+	*[ram]:2 ri = tmp;
 	#TODO  CC--
 }
 
-# ORB Rj, @Ri* A 96 1+2a CC-- (Ri) | = Rj  Byte
-:orb rj, @ri* is opA=0x96 & ri & rj
+# ORB Rj, @Ri A 96 1+2a CC-- (Ri) | = Rj  Byte
+:orb rj, @ri is opA=0x96 & ri & rj
 {
-	local tmp:1 = *[]:1 ri;
+	local tmp:1 = *[ram]:1 ri;
 	tmp = tmp | rj[0,8];
-	*[]:1 ri = tmp;
+	*[ram]:1 ri = tmp;
 	#TODO  CC--
 }
 
 # EOR Rj, Ri A 9A 1 CC-- Ri ^ = Rj  Word
-:eor rj, ri & opA=0x9A & ri & rj
+:eor rj, ri is opA=0x9A & ri & rj
 {
 	ri = ri ^ rj;
 	#TODO  CC--
 }
 
-# EOR Rj, @Ri* A 9C 1+2a CC-- (Ri) ^ = Rj  Word
-:eor rj, @ri* is opA=0x9C & ri & rj
+# EOR Rj, @Ri A 9C 1+2a CC-- (Ri) ^ = Rj  Word
+:eor rj, @ri is opA=0x9C & ri & rj
 {
-	local tmp:4 = *[]:4 ri;
+	local tmp:4 = *[ram]:4 ri;
 	tmp = tmp ^ rj;
-	*[]:4 ri = tmp;
+	*[ram]:4 ri = tmp;
 	#TODO  CC--
 }
 
-# EORH Rj, @Ri* A 9D 1+2a CC-- (Ri) ^ = Rj  Halfword
-:eorh rj, @ri* is opA=0x9D & ri & rj
+# EORH Rj, @Ri A 9D 1+2a CC-- (Ri) ^ = Rj  Halfword
+:eorh rj, @ri is opA=0x9D & ri & rj
 {
-	local tmp:2 = *[]:2 ri;
+	local tmp:2 = *[ram]:2 ri;
 	tmp = tmp ^ rj[0,16];
-	*[]:2 ri = tmp;
+	*[ram]:2 ri = tmp;
 	#TODO  CC--
 }
 
-# EORB Rj, @Ri* A 9E 1+2a CC-- (Ri) ^ = Rj  Byte
-:eorb rj, @ri* is opA=0x9E & ri & rj
+# EORB Rj, @Ri A 9E 1+2a CC-- (Ri) ^ = Rj  Byte
+:eorb rj, @ri is opA=0x9E & ri & rj
 {
-	local tmp:1 = *[]:1 ri;
+	local tmp:1 = *[ram]:1 ri;
 	tmp = tmp ^ rj[0,8];
-	*[]:1 ri = tmp;
+	*[ram]:1 ri = tmp;
 	#TODO  CC--
 }
 
 # BANDL #u4, @Ri C 80 1+2a ---- (Ri)&=(0xF0+u4)
 :bandl #u4, @ri is opC=0x80 & u4 & ri
 {
-	local tmp:4 = *[]:4 ri;
+	local tmp:4 = *[ram]:4 ri;
 	tmp = tmp & (0xf0 + u4);
-	*[]:4 r1 = tmp;
+	*[ram]:4 ri = tmp;
 }
 
 # BANDH #u4, @Ri C 81 1+2a ---- (Ri)&=((u4<<4)+0x0F)
 :bandh #u4, @ri is opC=0x81 & u4 & ri
 {
-	local tmp:4 = *[]:4 ri;
+	local tmp:4 = *[ram]:4 ri;
 	tmp = tmp & (0x0f + (u4 << 4));
-	*[]:4 r1 = tmp;
+	*[ram]:4 ri = tmp;
 }
 
 # BAND #u8, @Ri*1 ---- (Ri)&=u8
@@ -327,18 +468,18 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 # BORL #u4, @Ri C 90 1+2a ---- (Ri) | = u4
 :borl #u4, @ri is opC=0x90 & u4 & ri
 {
-	local tmp:4 = *[]:4 ri;
+	local tmp:4 = *[ram]:4 ri;
 	tmp = tmp | u4;
-	*[]:4 r1 = tmp;
+	*[ram]:4 ri = tmp;
 }
 
 
 # BORLH #u4, @Ri C 91 1+2a ---- (Ri) | = (u4<<4)
 :borlh #u4, @ri is opC=0x91 & u4 & ri
 {
-	local tmp:4 = *[]:4 ri;
+	local tmp:4 = *[ram]:4 ri;
 	tmp = tmp | (u4 << 4);
-	*[]:4 r1 = tmp;
+	*[ram]:4 ri = tmp;
 }
 
 # BOR #u8, @Ri*2 ---- (Ri) | = u8
@@ -347,23 +488,23 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 # BEORL #u4, @Ri C 98 1+2a ---- (Ri) ^ = u4
 :beorl #u4, @ri is opC=0x98 & u4 & ri
 {
-	local tmp:4 = *[]:4 ri;
+	local tmp:4 = *[ram]:4 ri;
 	tmp = tmp ^ u4;
-	*[]:4 r1 = tmp;
+	*[ram]:4 ri = tmp;
 }
 
 # BEORH #u4, @Ri C 99 1+2a ---- (Ri) ^ = (u4<<4)
 :beorh #u4, @ri is opC=0x99 & u4 & ri
 {
-	local tmp:4 = *[]:4 ri;
+	local tmp:4 = *[ram]:4 ri;
 	tmp = tmp ^ (u4 << 4);
-	*[]:4 r1 = tmp;
+	*[ram]:4 ri = tmp;
 }
 
 # BTSTL #u4, @Ri C 88 2+a 0C-- (Ri) & u4
 :btstl #u4, @ri is opC=0x88 & u4 & ri
 {
-	local res:4 = *[]:4 ri;
+	local res:4 = *[ram]:4 ri;
 	res = res & u4;
 	#TODO  0C--
 }
@@ -371,7 +512,7 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 # BTSTH #u4, @Ri C 89 2+a CC-- (Ri) & (u4<<4)
 :btsth #u4, @ri is opC=0x89 & u4 & ri
 {
-	local res:4 = *[]:4 ri;
+	local res:4 = *[ram]:4 ri;
 	res = res & (u4 << 4);
 	#TODO  0C--
 }
@@ -460,7 +601,7 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # LSL #u5, Ri (u5:0 to 31) C' B4 1 CC-C Ri << u5 --> Ri
-:lsl #u5, ri is opP=0xB4 & u5 & ri
+:lsl #u5, ri is opP=0x5A & u5 & ri
 {
 	ri = ri << u5;
 	#TODO  CC-C
@@ -488,7 +629,7 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 #LSR #u5, Ri (u5:0 to 31) C' B0 1 CC-C Ri >> u5 --> Ri
-:lsr #u5, ri is opP=0xB0 & u5 & ri
+:lsr #u5, ri is opP=0x58 & u5 & ri
 {
 	ri = ri >> u5;
 	#TODO  CC-C
@@ -509,14 +650,14 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 #ASR Rj, Ri A BA 1 CC-C Ri >> Rj --> Ri
-:asr rj, ri is opA=0BA & rj & ri
+:asr rj, ri is opA=0xBA & rj & ri
 {
 	ri = ri s>> rj;
 	#TODO  CC-C
 }
 
 #ASR #u5, Ri (u5:0 to 31) C' B8 1 CC-C Ri >> u5 --> Ri
-:asr #u5, ri is opP=0xB8 & u5 & ri
+:asr #u5, ri is opP=0x5C & u5 & ri
 {
 	ri = ri s>> u5;
 	#TODO  CC-C
@@ -537,21 +678,21 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # LDI:32 #i32, Ri E 9F-8 3 ---- i32 --> Ri
-:ldi:32 #i32, ri is opE=0x9F & subop=0x3 & i32 & ri
+:ldi^":32" #i32, ri is opE=0x9F & subop=0x8 & ri ; i32
 {
 	ri = i32;
 }
 
 # LDI:20 #i20, Ri C 9B 2 ---- i20 --> Ri
-:ldi:20 #i20, ri is opC=0x9B & i20 & ri
+:ldi^":20" #i20, ri is opC=0x9B & ri ; i20
 {
-	ri = zext(i20);
+	ri = i20;
 }
 
 # LDI:8 #i8, Ri B C0 1 ---- i8 --> Ri
-:ldi:8 #i8, ri is opB=0xC0 & i8 & ri
+:ldi^":8" #i8, ri is opB=0xC & i8 & ri
 {
-	ri = zext(i8);
+	ri = i8;
 }
 
 # *LDI # {i8 | i20 | i32} ,Ri* {i8 | i20 | i32} --> Ri
@@ -560,31 +701,31 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 # LD @Rj, Ri A 04 b ---- (Rj) --> Ri
 :ld @rj, ri is opA=0x04 & rj & ri
 {
-	ri = *[]:4 rj;
+	ri = *[ram]:4 rj;
 }
 
 # LD @(R13,Rj), Ri A 00 b ---- (R13+Rj) --> Ri
 :ld @(r13, rj), ri is opA=0x00 & rj & ri & r13
 {
-	ri = *[]:4 (r13 + rj);
+	ri = *[ram]:4 (r13 + rj);
 }
 
 # LD @(R14,disp10), Ri B 20 b ---- (R14+disp10) --> Ri
-:ld @(r14, disp10), ri is opB=0x20 & disp10 & ri & r14
+:ld @(r14, disp10), ri is opB=0x2 & disp10 & ri & r14
 {
-	ri = *[]:4 (r14 + disp10);
+	ri = *[ram]:4 (r14 + disp10);
 }
 
 # LD @(R15,udisp6), Ri C 03 b ---- (R15+udisp6) --> Ri
 :ld @(r15, udisp6), ri is opC=0x03 & r15 & udisp6 & ri
 {
-	ri = *[]:4 (r15 + udisp6);
+	ri = *[ram]:4 (r15 + udisp6);
 }
 
 # LD @R15+, Ri E 07-0 b ---- (R15) --> Ri,R15+=4
 :ld @r15+, ri is opE=0x07 & subop=0x0 & r15 & ri
 {
-	ri = *[]:4 r15;
+	ri = *[ram]:4 r15;
 	r15 = r15 + 4;
 }
 
@@ -592,14 +733,14 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 :ld @r15+, rs is opE=0x07 & subop=0x8 & r15 & rs
 {
 	#TODO
-	rs = *[]:4 r15;
+	rs = *[ram]:4 r15;
 	r15 = r15 + 4;
 }
 
 # LD @R15+, PS E 07-9 1+a+b CCCC (R15) --> PS, R15+=4
 :ld @r15+, PS is opE=0x07 & subop=0x9 & r15 & PS
 {
-	PS = *[]:4 r15;
+	PS = *[ram]:4 r15;
 	r15 = r15 + 4;
 	#TODO  CCCC
 }
@@ -607,118 +748,120 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 # LDUH @Rj, Ri A 05 b ---- (Rj) -->Ri Zero extension
 :lduh @rj, ri is opA=0x05 & rj & ri
 {
-	ri = zext(*[]:2 rj);
+	ri = zext(*[ram]:2 rj);
 }
 
 # LDUH @(R13,Rj), Ri A 01 b ---- (R13+Rj) -->Ri Zero extension
 :lduh @(r13, rj), ri is opA=0x01 & r13 & rj & ri
 {
-	ri = zext(*[]:2 (r13 + rj));
+	ri = zext(*[ram]:2 (r13 + rj));
 }
 
 # LDUH @(R14,disp9), Ri B 40 b ---- (R14+disp9) -->Ri Zero extension
-:lduh @(r14, disp9), ri is opB=0x40 & r14 & disp9 & ri
+:lduh @(r14, disp9), ri is opB=0x4 & r14 & disp9 & ri
 {
-	ri = zext(*[]:2 (r14 + disp9));
+	ri = zext(*[ram]:2 (r14 + disp9));
 }
 
 # LDUB @Rj, Ri A 06 b ---- (Rj) -->Ri Zero extension
 :ldub @rj, ri is opA=0x06 & rj & ri
 {
-	ri = zext(*[]:2 rj);
+	ri = zext(*[ram]:2 rj);
 }
 
 # LDUB @(R13,Rj), Ri A 02 b ---- (R13+Rj) -->Ri Zero extension
 :ldub @(r13, rj), ri is opA=0x02 & r13 & rj & ri
 {
-	ri = zext(*[]:2 (r13 + rj));
+	ri = zext(*[ram]:2 (r13 + rj));
 }
 
 # LDUB @(R14,disp8), Ri B 60 b ---- (R14+disp8) -->Ri Zero extension
-:ldub @(r14, disp8), ri is opB=0x60 & r14 & disp8 & ri
+:ldub @(r14, disp8), ri is opB=0x6 & r14 & disp8 & ri
 {
-	ri = zext(*[]:2 (r14 + disp8));
+	ri = zext(*[ram]:2 (r14 + disp8));
 }
 
 # ST Ri, @Rj A 14 a ---- Ri --> (Rj)
 :st ri, @rj is opA=0x14 & rj & ri
 {
-	*[]:4 rj = ri;
+	*[ram]:4 rj = ri;
 }
 
 # ST Ri, @(R13,Rj) A 10 a ---- Ri --> (R13+Rj)
 :st ri, @(r13, rj) is opA=0x10 & rj & ri & r13
 {
-	*[]:4 (r13 + rj) = ri;
+	*[ram]:4 (r13 + rj) = ri;
 }
 
 # ST Ri, @(R14,disp10) B 30 a ---- Ri --> (R14+disp10)
-:st ri, @(r14, disp10) is opB=0x30 & r14 & disp10 & ri
+:st ri, @(r14, disp10) is opB=0x3 & r14 & disp10 & ri
 {
-	*[]:4 (r14 + disp10) = ri;
+	*[ram]:4 (r14 + disp10) = ri;
 }
 
 # ST Ri, @(R15,udisp6) C 13 a ---- Ri --> (R15+udisp6)
 :st ri, @(r15, udisp6) is opC=0x13 & r15 & udisp6 & ri
 {
-	*[]:4 (r15 + udisp6) = ri;
+	*[ram]:4 (r15 + udisp6) = ri;
 }
 
 # ST Ri, @-R15 E 17-0 a ---- R15-=4,Ri --> (R15)
 :st ri, @-r15 is opE=0x17 & subop=0x0 & r15 & ri
 {
 	r15 = r15 - 4;
-	*[]:4 r15 = ri;
+	*[ram]:4 r15 = ri;
 }
 
 # ST Rs, @-R15 E 17-8 a ---- R15-=4, Rs --> (R15)
 :st rs, @-r15 is opE=0x17 & subop=0x8 & rs & r15
 {
 	r15 = r15 - 4;
-	*[]:4 r15 = rs;
+	*[ram]:4 r15 = rs;
 }
 
 # ST PS, @-R15 E 17-9 a ---- R15-=4, PS --> (R15)
 :st PS, @-r15 is opE=0x17 & subop=0x9 & PS & r15
 {
 	r15 = r15 - 4;
-	*[]:4 r15 = PS;
+	*[ram]:4 r15 = PS;
 }
 
 # STH Ri, @Rj A 15 a ---- Ri --> (Rj)
 :sth ri, @rj is opA=0x15 & rj & ri
 {
-	*[]:2 rj = ri[0,16];
+	*[ram]:2 rj = ri[0,16];
 }
 
 # STH Ri, @(R13,Rj) A 11 a ---- Ri --> (R13+Rj)
 :sth ri, @(r13, rj) is opA=0x11 & ri & rj & r13
 {
-	*[]:2 (r13 + rj) = ri[0,16];
+	*[ram]:2 (r13 + rj) = ri[0,16];
 }
 
 # STH Ri, @(R14,disp9) B 50 a ---- Ri --> (R14+disp9)
-:sth ri, @(r14, disp9) is opB=0x50 & r14 & disp9
+:sth ri, @(r14, disp9) is opB=0x5 & ri & r14 & disp9
 {
-	*[]:2 (r14 + disp9) = ri[0,16];
+	local ea:4 = r14 + disp9;
+	local tmp:4 = ri;
+	*[ram]:2 ea = tmp:2;
 }
 
 # STB Ri, @Rj A 16 a ---- Ri --> (Rj)
 :stb ri, @rj is opA=0x16 & ri & rj
 {
-	*[]:1 rj = ri[0,8];
+	*[ram]:1 rj = ri[0,8];
 }
 
 # STB Ri, @(R13,Rj) A 12 a ---- Ri --> (R13+Rj)
 :stb ri, @(r13, rj) is opA=0x12 & r13 & rj & ri
 {
-	*[]:1 (r13 + rj) = ri[0,8];
+	*[ram]:1 (r13 + rj) = ri[0,8];
 }
 
 # STB Ri, @(R14,disp8) B 70 a ---- Ri --> (R14+disp8)
-:stb ri, @(r14, disp8) is opB=0x70 & ri & r14 & disp8
+:stb ri, @(r14, disp8) is opB=0x7 & ri & r14 & disp8
 {
-	*[]:1 (r14 + disp8) = r[0,8];
+	*[ram]:1 (r14 + disp8) = ri[0,8];
 }
 
 # MOV Rj, Ri A 8B 1 ---- Rj --> Ri
@@ -734,7 +877,7 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # MOV Ri, Rs E B3 1 ---- Ri --> Rs
-:mov ri, rs is opE=0B3 & subop=0x1 & rs & ri
+:mov ri, rs is opE=0xB3 & subop=0x1 & rs & ri
 {
 	rs = ri;
 }
@@ -753,97 +896,103 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # JMP @Ri E 97-0 2 ---- Ri --> PC
-:jmp @ri is opE=0x97 & subop=0x2 & ri
+:jmp @ri is opE=0x97 & subop=0x0 & ri
 {
 	goto [ri];
 }
 
 # JMP:D @Ri E 9F-0 1 ---- Ri --> PC
-:jmp:d @ri is opE=0x9F & subop=0x0 & ri
+:jmp^":d" @ri is opE=0x9F & subop=0x0 & ri
 {
 	delayslot(1);
 	goto [ri];
 }
 
 # CALL label12 F D0 2 ---- PC+2-->RP , PC+2+(label12-PC-2)-->PC
-:call label12 is opF=0xD0 & label12
+:call label12 is opF=0x1A & label12
 {
-	RP = inst_next;
-	local ea:4 = label12 - inst_next;
+	local tmp:4 = inst_next;
+	RP = tmp;
+	local ea:4 = label12;
+	ea = ea - inst_next;
 	ea = inst_next + ea;
-	call ea;
+	call [ea];
 }
 
 # CALL:D label12 F D8 1 ---- PC+4 --> RP, PC+2+(label12-PC-2) --> PC
-:call:d label12 is opF=0xD8 & label12
+:call^":d" label12 is opF=0x1B & label12
 {
 	#TODO  is inst_start okay to use?
+	local tmp:4 = inst_start + 4;
 	delayslot(1);
-	RP = inst_start + 4;
+	RP = tmp;
 	local ea:4 = label12 - (inst_start + 2);
 	ea = (inst_start + 2) + ea;
-	call ea;
+	call [ea];
 }
 
 # CALL @Ri E 97-1 2 ---- PC+2-->RP ,Ri-->PC
 :call @ri is opE=0x97 & subop=0x1 & ri
 {
-	RP = inst_next;
+	local tmp:4 = inst_next;
+	RP = tmp;
 	call [ri];
 }
 
 # CALL:D @Ri E 9F-1 1 ---- PC+4 --> RP ,Ri --> PC
-:call:d @ri is opE=0x9F & subop=0x1 & ri
+:call^":d" @ri is opE=0x9F & subop=0x1 & ri
 {
 	#TODO  is inst_start okay to use?
+	local tmp:4 = inst_start + 4;
 	delayslot(1);
-	RP = inst_start + 4;
+	RP = tmp;
 	call [ri];
 }
 
 # RET E 97-2 2 ---- RP --> PC
 :ret is opE=0x97 & subop=0x2
 {
-	return RP;
+	return [RP];
 }
 
 # RET:D E 9F-2 1 ---- RP --> PC
-:ret:d is opE=0x9F & subop=0x2
+:ret^":d" is opE=0x9F & subop=0x2
 {
 	delayslot(1);
-	return RP;
+	return [RP];
 }
 
-# INT #u8 D AC 3+3a ---- SSP-=4,PS --> (SSP),SSP-=4,PC+2 --> (SSP),(TBR+0x3FC-u8x4) --> PC
-:int #u8 is opD=0xAC & u8
-{
-	SSP = SSP - 4;
-	*[]:4 SSP = PS;
-	I = 0;
-	S = 0;
-	local ea:4 = TBR + 0x3fc - (u8 * 4);
-	call ea;
-}
+#TODO
+# # INT #u8 D AC 3+3a ---- SSP-=4,PS --> (SSP),SSP-=4,PC+2 --> (SSP),(TBR+0x3FC-u8x4) --> PC
+# :int #u8 is opD=0xAC & u8
+# {
+# 	SSP = SSP - 4;
+# 	*[ram]:4 SSP = PS;
+# 	I = 0;
+# 	S = 0;
+# 	local ea:4 = TBR + 0x3fc - zext(u8 * 4);
+# 	call [ea];
+# }
 
 # INTE E 9F-3 3+3a ---- SSP-=4,PS --> (SSP),SSP-=4,PC+2 --> (SSP),(TBR+0x3D8) -->PC
 :inte is opE=0x9F & subop=0x3
 {
 	SSP = SSP - 4;
-	*[]:4 SSP = PS;
+	*[ram]:4 SSP = PS;
 	SSP = SSP - 4;
-	*[]:4 SSP = inst_next;
+	*[ram]:4 SSP = inst_next;
 	local ea:4 = TBR + 0x3d8;
-	call ea;
+	call [ea];
 }
 
 # RETI E 97-3 2+2A CCCC (R15) --> PC,R15-=4,(R15) --> PS,R15-=4
 :reti is opE=0x97 & subop=0x3
 {
-	local ea:4 = *[]:4 r15;
+	local ea:4 = *[ram]:4 r15;
 	r15 = r15 - 4;
-	PS = *[]:4 r15;
+	PS = *[ram]:4 r15;
 	r15 = r15 - 4;
-	return ea;
+	return [ea];
 	#TODO  CCCC
 }
 
@@ -868,7 +1017,7 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 	if (cc != 0) goto label9;
 }
 
-:b^cc^:d label9 is opDCC=0xF & cc & label9
+:b^cc^":d" label9 is opDCC=0xF & cc & label9
 {
 	delayslot(1);
 	if (cc != 0) goto label9;
@@ -881,25 +1030,28 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 	tmp = tmp;
 }
 
-# ANDCCR #u8 D 83 c CCCC CCR and u8 --> CCR
-:andccr #u8 is opD=0x83
-{
-	CCR = CCR & u8;
-	#TODO  CCCC
-}
+#TODO
+# # ANDCCR #u8 D 83 c CCCC CCR and u8 --> CCR
+# :andccr #u8 is opD=0x83
+# {
+# 	CCR = CCR & u8;
+# 	#TODO  CCCC
+# }
 
-# ORCCR #u8 D 93 c CCCC CCR or u8 --> CCR
-:orccr #u8 is opD=0x93 & u8
-{
-	CCR = CCR | u8;
-	#TODO  CCCC
-}
+#TODO
+# # ORCCR #u8 D 93 c CCCC CCR or u8 --> CCR
+# :orccr #u8 is opD=0x93 & u8
+# {
+# 	CCR = CCR | u8;
+# 	#TODO  CCCC
+# }
 
-# STILM #u8 D 87 1 ---- i8 --> ILM
-:stilm #u8 is opD=0x87 & u8
-{
-	ILM = u8;
-}
+#TODO
+# # STILM #u8 D 87 1 ---- i8 --> ILM
+# :stilm #u8 is opD=0x87 & u8
+# {
+# 	ILM = u8;
+# }
 
 # ADDSP #s10 D A3 1 ---- R15 += s10
 :addsp #s10 is opD=0xA3 & s10
@@ -932,13 +1084,13 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # LDM0 (reglist) D 8C ---- (R15) --> reglist,R15 increment- Load multi R0-R7
-:ldm0 (reglist) is opD=0x8C & reglist
+:ldm0 (ldm0_list) is opD=0x8C & ldm0_list
 {
 	build ldm0_list;
 }
 
 # LDM1 (reglist) D 8D ---- (R15) --> reglist,R15 increment- Load multi R8-R15
-:ldm1 (reglist) is opD=0x8D & reglist
+:ldm1 (ldm1_list) is opD=0x8D & ldm1_list
 {
 	build ldm1_list;
 }
@@ -947,15 +1099,15 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 #TODO
 
 # STM0 (reglist) D 8E ---- R15 decrement,reglist --> (R15)- Store multi R0-R7
-:stm0 (reglist) is opD=0x8E & reglist
+:stm0 (stm0_list) is opD=0x8E & stm0_list
 {
 	build stm0_list;
 }
 
 # STM1 (reglist) D 8F ---- R15 decrement,reglist --> (R15)- Store multi R8-R15
-:stm1 (reglist) is opD=0x8F & reglist
+:stm1 (stm1_list) is opD=0x8F & stm1_list
 {
-	build stm0_list;
+	build stm1_list;
 }
 
 # STM (reglist)*3 ---- R15 decrement,reglist --> (R15)- Store multi R0-R15
@@ -964,7 +1116,7 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 # ENTER #u10 D 0F 1+a ---- R14 --> (R15 - 4),R15 - 4 --> R14,R15 - u10 --> R15
 :enter #u10 is opD=0x0F & u10
 {
-	*[]:4 (r15 - 4) = r14;
+	*[ram]:4 (r15 - 4) = r14;
 	r14 = r15 - 4;
 	r15 = r15 - u10;
 }
@@ -973,106 +1125,110 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 :leave is opE=0x9F & subop=0x9
 {
 	r15 = r14 + 4;
-	r14 = *[]:4 (r15 - 4);
+	r14 = *[ram]:4 (r15 - 4);
 }
 
 # XCHB @Rj, Ri*5 A 8A 2a ---- Ri --> TEMP,(Rj) --> Ri,TEMP --> (Rj)
 :xchb @rj, ri is opA=0x8A & rj & ri
 {
 	local tmp = ri;
-	ri = *[]:1 rj;
-	rj = *[]:1 tmp;
+	ri = *[ram]:1 rj;
+	rj = *[ram]:1 tmp;
 }
 
 # DMOV @dir10, R13 D 08 b ---- (dir10) --> R13
-:dmov @dir10, r13 is opD=0x08 & dir10
+:dmov @^dir10, r13 is opD=0x08 & dir10 & r13
 {
-	r13 = *[]: dir10;
+	r13 = *[ram]:4 dir10;
 }
 
 # DMOV R13, @dir10 D 18 a ---- R13 --> (dir10)
-:dmov r13, @dir10 is opD=0x18 & dir10
+:dmov r13, @dir10 is opD=0x18 & dir10 & r13
 {
-	*[]:4 dir10 = r13;
+	*[ram]:4 dir10 = r13;
 }
 
 # DMOV @dir10, @R13+ D 0C 2a ---- (dir10) --> (R13),R13+=4
-:dmov @dir10, @r13+ is opD=0x0C & dir10
+:dmov @dir10, @r13+ is opD=0x0C & dir10 & r13
 {
-	*[]:4 r13 = *[]:4 dir10;
+	*[ram]:4 r13 = *[ram]:4 dir10;
 	r13 = r13 + 4;
 }
 
 # DMOV @R13+, @dir10 D 1C 2a ---- (R13) --> (dir10),R13+=4
-:dmov @r13+, @dir10 is opD=0x1c & dir10 
+:dmov @r13+, @dir10 is opD=0x1c & dir10 & r13
 {
-	*[]:4 dir10 = *[]:4 r13;
+	*[ram]:4 dir10 = *[ram]:4 r13;
 	r13 = r13 + 4;
 }
 
 # DMOV @dir10, @-R15 D 0B 2a ---- R15-=4,(R15) --> (dir10)
-:dmov @dir10, @-r15 is opD=0x0B & dir10
+:dmov @dir10, @-r15 is opD=0x0B & dir10 & r15
 {
 	r15 = r15 - 4;
-	*[]:4 dir10 = *[]:4 r15;
+	*[ram]:4 dir10 = *[ram]:4 r15;
 }
 
 # DMOV @R15+, @dir10 D 1B 2a ---- (R15) --> (dir10),R15+=4
-:dmov @r15+, @dir10 is opD=0x1B & dir10
+:dmov @r15+, @dir10 is opD=0x1B & dir10 & r15
 {
-	*[]:4 dir10 = *[]:4 r15;	
+	*[ram]:4 dir10 = *[ram]:4 r15;	
 	r15 = r15 + 4;
 }
 
 # DMOVH @dir9, R13 D 09 b ---- (dir9) --> R13
-:dmovh @dir9, r13 is opD=0x09 & dir9
+:dmovh @dir9, r13 is opD=0x09 & dir9 & r13
 {
-	r13 = *[]:2 dir9;
+	r13 = *[ram]:2 dir9;
 }
 
 # DMOVH R13, @dir9 D 19 a ---- R13 --> (dir9)
-:dmovh r13, @dir9 is opD=0x19 & dir9
+:dmovh r13, @dir9 is opD=0x19 & dir9 & r13
 {
-	*[]:2 dir9 = r13[0,16];
+	local ea:4 = dir9;
+	local tmp:4 = r13;
+	*[ram]:2 ea = tmp:2;
 }
 
 # DMOVH @dir9, @R13+ D 0D 2a ---- (dir9) --> (R13),R13+=2
-:dmovh @dir9, @r13+ is opD=0x0D & dir9
+:dmovh @dir9, @r13+ is opD=0x0D & dir9 & r13
 {
-	*[]:2 r13 = *[]:2 dir9;
+	*[ram]:2 r13 = *[ram]:2 dir9;
 	r13 = r13 + 2;
 }
 
 # DMOVH @R13+, @dir9 D 1D 2a ---- (R13) --> (dir9),R13+=2
-:dmovh @r13+, @dir9 is opD=0x1D & dir9
+:dmovh @r13+, @dir9 is opD=0x1D & dir9 & r13
 {
-	*[]:2 dir9 = *[]:2 r13;
+	*[ram]:2 dir9 = *[ram]:2 r13;
 	r13 = r13 + 2;
 }
 
 # DMOVB @dir8, R13 D 0A b ---- (dir8) --> R13
-:dmovb @dir8, r13 is opD=0x0A & dir8
+:dmovb @dir8, r13 is opD=0x0A & dir8 & r13
 {
-	r13 = *[]:1 dir8;
+	r13 = *[ram]:1 dir8;
 }
 
 # DMOVB R13, @dir8 D 1A a ---- R13 --> (dir8)
-:dmovb r13, @dir8 is opD=0x1A & dir8
+:dmovb r13, @dir8 is opD=0x1A & dir8 & r13
 {
-	*[]:1 dir8 = r13[0,8];
+	local ea:4 = dir8;
+	local tmp:4 = r13;
+	*[ram]:1 ea = tmp:1;
 }
 
 # DMOVB @dir8, @R13+ D 0E 2a ---- (dir8) --> (R13),R13++
-:dmovb @dir8, @r13+ is opD=0x0E & dir8
+:dmovb @dir8, @r13+ is opD=0x0E & dir8 & r13
 {
-	*[]:1 r13 = *[]:1 dir8;
+	*[ram]:1 r13 = *[ram]:1 dir8;
 	r13 = r13 + 1;
 }
 
 # DMOVB @R13+, @dir8 D 1E 2a ---- (R13) --> (dir8),R13++
-:dmovb @r13+, @dir8 is opD=0x1E & dir8
+:dmovb @r13+, @dir8 is opD=0x1E & dir8 & r13
 {
-	*[]:1 dir8 = *[]:1 r13;
+	*[ram]:1 dir8 = *[ram]:1 r13;
 	r13 = r13 + 1;
 }
 
@@ -1084,76 +1240,36 @@ attach variables [ rs] [ TBR RP SSP USP MDH MDL _ _ _ _ _ _ _ _ _ _ ];
 }
 
 # STRES #u4, @Ri+ C BD a ---- u4 resource --> (Ri), Ri+=4
-:stres #u4, @ri+ is opC=0xBD is u4 & ri
+:stres #u4, @ri+ is opC=0xBD & u4 & ri
 {
 	#TODO huh
 	ri = ri + 4;
 }
 
-# COPOP #u4, #u8, CRj, CRi E 9F-C 2+a ---- Operation instruction
-:copop #u4, #u8, crj, cri is opE=0x9F & subop=0xC & u8 & u8 & crj & cri
-{
-	#TODO
-}
+#TODO
+# # COPOP #u4, #u8, CRj, CRi E 9F-C 2+a ---- Operation instruction
+# :copop #u4, #u8, crj, cri is opE=0x9F & subop=0xC & u8 & u8 & crj & cri
+# {
+# 	#TODO
+# }
 
-# COPLD #u4, #u8, Rj, CRi E 9F-D 1+2a ---- Rj --> CRi
-:copld #u4, #u8, rj, cri is opE=0x9F & subop=0xD & u4 & u8 & rj & cri
-{
-	#TOOD
-}
+#TODO
+# # COPLD #u4, #u8, Rj, CRi E 9F-D 1+2a ---- Rj --> CRi
+# :copld #u4, #u8, rj, cri is opE=0x9F & subop=0xD & u4 & u8 & rj & cri
+# {
+# 	#TOOD
+# }
 
-# COPST #u4, #u8, CRj, Ri E 9F-E 1+2a ---- CRj --> Ri
-:copst #u4, #u8, crj, ri is opE=0x9F & subop=0xE & u4 & u8 & crj & ri
-{
-	#TODO
-}
+#TODO
+# # COPST #u4, #u8, CRj, Ri E 9F-E 1+2a ---- CRj --> Ri
+# :copst #u4, #u8, crj, ri is opE=0x9F & subop=0xE & u4 & u8 & crj & ri
+# {
+# 	#TODO
+# }
 
-# COPSV #u4, #u8, CRj, Ri E 9F-F 1+2a ---- CRj --> Ri
-:copsv #u4, #u8, crj, ri is opE=0x9F & subop=0xF & u4 & u8 & crj & ri
-{
-	#TODO
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#TODO
+# # COPSV #u4, #u8, CRj, Ri E 9F-F 1+2a ---- CRj --> Ri
+# :copsv #u4, #u8, crj, ri is opE=0x9F & subop=0xF & u4 & u8 & crj & ri
+# {
+# 	#TODO
+# }
